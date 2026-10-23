@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Badge, btn, Card, Notice } from "@/components/ui";
 import { inr } from "@/lib/format";
+import { suggestMapping } from "@/lib/zoho/suggest";
 
 interface Item {
   item_id: string;
@@ -31,6 +32,7 @@ export interface SkuOption {
   sku_id: string;
   sku_name: string;
   distributor_id: string;
+  distributor_name: string | null;
   needed: boolean;
 }
 
@@ -82,7 +84,7 @@ export function MappingEditor({ skus, mappings, organizationId }: { skus: SkuOpt
       {!organizationId && <p className="mt-3 text-sm text-slate-500">Mappings can be edited once the server Zoho connection is live.</p>}
       <div className="mt-3 space-y-2">
         {rows.map((s) => (
-          <MappingRow key={s.sku_id} sku={s} mapping={mappings.find((m) => m.sku_id === s.sku_id)} catalog={catalog} canEdit={Boolean(organizationId)} organizationId={organizationId} />
+          <MappingRow key={`${s.sku_id}-${catalog ? "loaded" : "empty"}`} sku={s} mapping={mappings.find((m) => m.sku_id === s.sku_id)} catalog={catalog} canEdit={Boolean(organizationId)} organizationId={organizationId} />
         ))}
         {rows.length === 0 && <p className="text-sm text-slate-500">No approved orders need mapping yet.</p>}
       </div>
@@ -92,9 +94,13 @@ export function MappingEditor({ skus, mappings, organizationId }: { skus: SkuOpt
 
 function MappingRow({ sku, mapping, catalog, canEdit, organizationId }: { sku: SkuOption; mapping?: MappingView; catalog: { items: Item[]; vendors: Vendor[] } | null; canEdit: boolean; organizationId: string | null }) {
   const router = useRouter();
-  const [itemId, setItemId] = useState(mapping?.zoho_item_id ?? "");
-  const [vendorId, setVendorId] = useState(mapping?.zoho_vendor_id ?? "");
-  const [rate, setRate] = useState(mapping ? String(mapping.purchase_rate) : "");
+  // Rows remount when the catalog loads, so unmapped SKUs start from the suggestion.
+  const suggestion = !mapping && catalog ? suggestMapping(sku, catalog) : null;
+  const [itemId, setItemId] = useState(mapping?.zoho_item_id ?? suggestion?.item?.item_id ?? "");
+  const [vendorId, setVendorId] = useState(mapping?.zoho_vendor_id ?? suggestion?.vendor?.contact_id ?? "");
+  const [rate, setRate] = useState(
+    mapping ? String(mapping.purchase_rate) : suggestion?.item?.purchase_rate && suggestion.item.purchase_rate > 0 ? String(suggestion.item.purchase_rate) : "",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const item = useMemo(() => catalog?.items.find((i) => i.item_id === itemId), [catalog, itemId]);
@@ -176,6 +182,12 @@ function MappingRow({ sku, mapping, catalog, canEdit, organizationId }: { sku: S
           <button className={btn.primary} disabled={busy || !itemId || !vendorId || !(Number(rate) > 0)} onClick={save}>
             {busy ? "Verifying…" : "Confirm mapping"}
           </button>
+          {suggestion && (suggestion.item || suggestion.vendor) && (
+            <p className="text-xs font-medium text-emerald-700 md:col-span-4">
+              Suggested{suggestion.item ? ` item by SKU ${sku.sku_id}` : ""}{suggestion.item && suggestion.vendor ? " and" : ""}
+              {suggestion.vendor ? ` vendor by name “${sku.distributor_name}”` : ""} — check, then Confirm mapping.
+            </p>
+          )}
           <p className="text-xs text-slate-500 md:col-span-4">
             {item ? (item.purchase_rate && item.purchase_rate > 0 ? `Zoho item purchase rate: ${inr(item.purchase_rate)}. Change it only if you have a confirmed price.` : "This Zoho item has no purchase rate — enter and confirm the agreed price.") : "Rate comes from the Zoho item where set, or must be entered by you."}
           </p>

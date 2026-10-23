@@ -18,20 +18,22 @@ export default async function PurchaseOrdersPage() {
 
   let data;
   try {
-    const [status, approved, mappings, pos, skus] = await Promise.all([
+    const [status, approved, mappings, pos, skus, dists] = await Promise.all([
       getZohoStatus(),
       getApprovedForPo(),
       listMappings(),
       listPurchaseOrders(),
       adminDb().from("sku_master").select("sku_id,sku_name,distributor_id").order("sku_id"),
+      adminDb().from("distributor_master").select("distributor_id,distributor_name"),
     ]);
     if (skus.error) throw new Error(skus.error.message);
+    if (dists.error) throw new Error(dists.error.message);
     const poRecs = await getRecommendationsByIds([...new Set(pos.flatMap((p) => p.recommendation_ids))]);
-    data = { status, approved, mappings, pos, skus: skus.data ?? [], poRecs };
+    data = { status, approved, mappings, pos, skus: skus.data ?? [], dists: dists.data ?? [], poRecs };
   } catch (e) {
     return <SetupNotice error={e instanceof Error ? e.message : String(e)} />;
   }
-  const { status, approved, mappings, pos, skus, poRecs } = data;
+  const { status, approved, mappings, pos, skus, dists, poRecs } = data;
   const live = status.live;
 
   const lines: ReadyLine[] = approved.map((r) => {
@@ -51,7 +53,11 @@ export default async function PurchaseOrdersPage() {
     };
   });
   const neededSkus = new Set(approved.map((r) => r.sku_id));
-  const skuOptions: SkuOption[] = skus.map((s) => ({ ...s, needed: neededSkus.has(s.sku_id) }));
+  const skuOptions: SkuOption[] = skus.map((s) => ({
+    ...s,
+    distributor_name: dists.find((d) => d.distributor_id === s.distributor_id)?.distributor_name ?? null,
+    needed: neededSkus.has(s.sku_id),
+  }));
   const rows: PoRow[] = pos.map((p) => ({
     ...p,
     skus: p.recommendation_ids.map((id) => {

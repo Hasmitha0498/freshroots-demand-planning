@@ -103,8 +103,8 @@ npm run zoho:token -- <code> --vercel
 ```
 
    This saves `ZOHO_REFRESH_TOKEN`, `ZOHO_API_DOMAIN` and, when there is only one organisation, `ZOHO_ORGANIZATION_ID` to `.env.local`. With `--vercel`, it also copies the Zoho settings to Vercel production. Then redeploy with `npx vercel deploy --prod`.
-5. In Zoho Inventory, make sure the **items** and **vendors** you will order already exist. The app never creates master records.
-6. In the app, go to **Purchase Orders**, check the "Live Zoho Inventory" badge, then use **Load Zoho items & vendors** to map each SKU and confirm its rate.
+5. In Zoho Inventory, make sure the **items** and **vendors** you will order already exist. The app never creates master records. For a test organisation, import `zoho_import/vendors.csv` and `zoho_import/items.csv` (demo prices; see `zoho_import/HOW_TO_IMPORT.md`).
+6. In the app, go to **Purchase Orders**, check the "Live Zoho Inventory" badge, then use **Load Zoho items & vendors** to map each SKU and confirm its rate. Items are pre-selected by matching the Zoho **SKU** field to `SKU_ID`, and vendors by matching the distributor name; you confirm each mapping.
 
 How it works at runtime:
 - The server exchanges the refresh token for one-hour access tokens and caches them per server instance. Concurrent requests share one refresh.
@@ -148,7 +148,7 @@ npm run build
 ```
 
 - `npm run dev` serves http://localhost:3001 (pinned in package.json).
-- `npm test` runs 62 tests: rules, ISO weeks, the dataset oracle, decisions, PO idempotency and failures, the mocked Zoho client and server connection, and the SQL migration on PGlite.
+- `npm test` runs 64 tests: rules, ISO weeks, the dataset oracle, decisions, PO idempotency and failures, the mocked Zoho client and server connection, and the SQL migration on PGlite.
 - `npm run e2e:supabase` runs the backend flow against your real Supabase project and deletes its test records afterwards.
 
 ### 5. Deploy to Vercel

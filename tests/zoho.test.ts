@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ZohoAmbiguousError, ZohoApiError, ZohoClient } from "@/lib/zoho/client";
 import { createPurchaseOrder, listVendors, parseCreatedPo } from "@/lib/zoho/api";
 import { buildPoPayload, compareCreatedLines, validatePoLines, type PoLineInput } from "@/lib/zoho/po";
+import { suggestMapping } from "@/lib/zoho/suggest";
 import { safeAccountsOrigin, safeApiOrigin, zohoPoWebLink } from "@/lib/zoho/config";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -96,5 +97,29 @@ describe("security helpers", () => {
     expect(safeApiOrigin("https://www.zohoapis.in")).toBe("https://www.zohoapis.in");
     expect(safeApiOrigin("https://zohoapis.attacker.io")).toBeNull();
     expect(zohoPoWebLink("https://www.zohoapis.in", "600", "99")).toBe("https://inventory.zoho.in/app/600#/purchaseorders/99");
+  });
+});
+
+describe("mapping suggestion", () => {
+  const catalog = {
+    items: [
+      { item_id: "i1", sku: "SKU001" },
+      { item_id: "i3", sku: " sku003 " },
+      { item_id: "ix", sku: null },
+    ],
+    vendors: [
+      { contact_id: "v1", contact_name: "NutriFlow Distributors", company_name: null },
+      { contact_id: "v2", contact_name: "GP", company_name: "GrainPath Logistics" },
+    ],
+  };
+  it("matches item by SKU field and vendor by name, case-insensitively", () => {
+    const a = suggestMapping({ sku_id: "SKU001", distributor_name: "nutriflow distributors" }, catalog);
+    expect([a.item?.item_id, a.vendor?.contact_id]).toEqual(["i1", "v1"]);
+    const b = suggestMapping({ sku_id: "SKU003", distributor_name: "GrainPath Logistics" }, catalog);
+    expect([b.item?.item_id, b.vendor?.contact_id]).toEqual(["i3", "v2"]);
+  });
+  it("suggests nothing when there is no exact match", () => {
+    const c = suggestMapping({ sku_id: "SKU999", distributor_name: "Unknown Co" }, catalog);
+    expect(c).toEqual({ item: undefined, vendor: undefined });
   });
 });
