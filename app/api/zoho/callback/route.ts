@@ -20,19 +20,29 @@ function back(req: NextRequest, params: Record<string, string>) {
 export async function GET(req: NextRequest) {
   const actor = plannerActor();
   const q = req.nextUrl.searchParams;
-  if (q.get("error")) return back(req, { zoho_error: `Zoho declined: ${q.get("error")}` });
+  // Failures are also written to audit_events so they can be diagnosed later (no codes or tokens stored).
+  const fail = async (message: string) => {
+    await audit(actor.name, "zoho.connect_failed", "zoho_connection", "1", {
+      message,
+      host: req.nextUrl.host,
+      accounts_server: q.get("accounts-server"),
+      had_state_cookie: Boolean(req.cookies.get(STATE_COOKIE)),
+    });
+    return back(req, { zoho_error: message });
+  };
+  if (q.get("error")) return fail(`Zoho declined: ${q.get("error")}`);
   const state = q.get("state") ?? "";
   const expected = req.cookies.get(STATE_COOKIE)?.value ?? "";
   const valid = state.length > 0 && state.length === expected.length && timingSafeEqual(Buffer.from(state), Buffer.from(expected));
-  if (!valid) return back(req, { zoho_error: "OAuth state mismatch or expired. Start Connect Zoho Inventory again." });
+  if (!valid) return fail("OAuth state mismatch or expired. Start Connect Zoho Inventory again from this same site address.");
   const code = q.get("code");
-  if (!code) return back(req, { zoho_error: "No authorisation code returned by Zoho." });
+  if (!code) return fail("No authorisation code returned by Zoho.");
 
   try {
     await completeOAuth(code, q.get("accounts-server"), actor.name);
-    await audit(actor.name, "zoho.connected", "zoho_connection", "1", {});
+    await audit(actor.name, "zoho.connected", "zoho_connection", "1", { host: req.nextUrl.host });
     return back(req, { zoho_connected: "1" });
   } catch (e) {
-    return back(req, { zoho_error: e instanceof Error ? e.message : "Zoho connection failed." });
+    return fail(e instanceof Error ? e.message : "Zoho connection failed.");
   }
 }
