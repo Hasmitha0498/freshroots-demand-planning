@@ -1,8 +1,9 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Badge, btn, Card } from "@/components/ui";
-import { dateTime, int } from "@/lib/format";
+import { btn, Card, Chip, EmptyState, Section } from "@/components/ui";
+import { inr, int } from "@/lib/format";
+import { productName, shortDateTime, type Tone } from "@/lib/presentation";
 
 export interface PoRow {
   id: string;
@@ -12,27 +13,19 @@ export interface PoRow {
   zoho_vendor_name: string;
   zoho_purchaseorder_id: string | null;
   zoho_purchaseorder_number: string | null;
-  zoho_status: string | null;
   error_message: string | null;
   warnings: string[];
-  created_by_email: string;
   created_at: string;
-  updated_at: string;
-  skus: { sku_id: string; qty: number | null }[];
+  products: { name: string; qty: number | null }[];
+  total: number;
   link: string | null;
 }
 
-const STYLE: Record<string, string> = {
-  created: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  failed: "bg-red-50 text-red-700 ring-red-200",
-  needs_reconciliation: "bg-amber-50 text-amber-800 ring-amber-300",
-  submitting: "bg-sky-50 text-sky-700 ring-sky-200",
-};
-const LABEL: Record<string, string> = {
-  created: "Created in Zoho",
-  failed: "PO not created",
-  needs_reconciliation: "Needs reconciliation",
-  submitting: "Submitting",
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+  created: { label: "PO created", tone: "green" },
+  failed: { label: "PO failed", tone: "red" },
+  needs_reconciliation: { label: "Check in Zoho", tone: "amber" },
+  submitting: { label: "Creating PO", tone: "blue" },
 };
 
 export function PoHistory({ rows }: { rows: PoRow[] }) {
@@ -40,12 +33,21 @@ export function PoHistory({ rows }: { rows: PoRow[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<Record<string, string>>({});
 
-  async function reconcile(id: string) {
+  async function check(id: string) {
     setBusy(id);
     try {
       const res = await fetch(`/api/purchase-orders/${id}/reconcile`, { method: "POST" });
       const body = await res.json();
-      setMsg({ ...msg, [id]: res.ok ? (body.result === "found" ? "Found in Zoho — record updated." : body.result === "not_found" ? "Not found in Zoho — safe to retry from the ready list." : `Status: ${body.result}`) : body.error });
+      setMsg({
+        ...msg,
+        [id]: res.ok
+          ? body.result === "found"
+            ? "Found in Zoho — updated."
+            : body.result === "not_found"
+              ? "Not in Zoho. You can create it again from Ready to order."
+              : "Updated."
+          : body.error,
+      });
       router.refresh();
     } finally {
       setBusy(null);
@@ -53,79 +55,58 @@ export function PoHistory({ rows }: { rows: PoRow[] }) {
   }
 
   return (
-    <Card>
-      <h2 className="border-b border-slate-200 px-4 py-3 font-semibold">Purchase order history</h2>
-      {rows.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-slate-500">No PO submissions yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-2">Status</th>
-                <th className="px-2 py-2">Zoho PO</th>
-                <th className="px-2 py-2">Vendor</th>
-                <th className="px-2 py-2">Lines</th>
-                <th className="px-2 py-2">Reference</th>
-                <th className="px-2 py-2">Created</th>
-                <th className="px-2 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-2">
-                    <Badge className={STYLE[r.status]}>{LABEL[r.status] ?? r.status}</Badge>
-                    {r.attempts > 1 && <span className="ml-1 text-xs text-slate-500">attempt {r.attempts}</span>}
-                    {r.error_message && <p className="mt-1 max-w-xs text-xs text-red-700">{r.error_message}</p>}
-                    {r.warnings?.map((w) => (
-                      <p key={w} className="mt-1 max-w-xs text-xs text-amber-800">⚠ {w}</p>
-                    ))}
-                  </td>
-                  <td className="px-2 py-2">
-                    {r.zoho_purchaseorder_id ? (
-                      <>
-                        <p className="font-medium">{r.zoho_purchaseorder_number ?? "–"}</p>
-                        <p className="font-mono text-xs text-slate-500">ID {r.zoho_purchaseorder_id}</p>
-                        <p className="text-xs">Zoho status: {r.zoho_status ?? "–"}</p>
-                        {r.link && (
-                          <a href={r.link} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 underline" title="Constructed from the Zoho region, organisation and PO ID">
-                            Open in Zoho Inventory ↗
-                          </a>
-                        )}
-                      </>
+    <Section title="Purchase orders">
+      <Card>
+        {rows.length === 0 ? (
+          <EmptyState title="No purchase orders yet">Purchase orders you create appear here with their Zoho number.</EmptyState>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {rows.map((r) => {
+              const s = STATUS[r.status] ?? { label: r.status, tone: "gray" as Tone };
+              return (
+                <li key={r.id} className="grid grid-cols-1 gap-2 px-5 py-3.5 sm:grid-cols-[9rem_minmax(0,1fr)_7rem_9rem] sm:items-start sm:gap-4">
+                  <div>
+                    {r.zoho_purchaseorder_number ? (
+                      r.link ? (
+                        <a href={r.link} target="_blank" rel="noopener noreferrer" className={`${btn.link} text-sm`} title={`Zoho ID ${r.zoho_purchaseorder_id} · reference ${r.reference_number}`}>
+                          {r.zoho_purchaseorder_number} ↗
+                        </a>
+                      ) : (
+                        <span className="text-sm font-medium text-slate-900">{r.zoho_purchaseorder_number}</span>
+                      )
                     ) : (
-                      <span className="text-slate-400">–</span>
+                      <span className="text-sm text-slate-400" title={`Reference ${r.reference_number}`}>
+                        Not created
+                      </span>
                     )}
-                  </td>
-                  <td className="px-2 py-2">{r.zoho_vendor_name}</td>
-                  <td className="px-2 py-2 text-xs">
-                    {r.skus.map((s) => (
-                      <div key={s.sku_id}>
-                        {s.sku_id} · {int(s.qty)}
-                      </div>
+                    <p className="text-xs text-slate-500">{shortDateTime(r.created_at)}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-slate-900">{r.zoho_vendor_name}</p>
+                    <p className="truncate text-xs text-slate-500">{r.products.map((p) => `${productName(p.name)} × ${int(p.qty)}`).join(", ")}</p>
+                    {r.status === "failed" && r.error_message && <p className="mt-1 text-xs text-red-700">{r.error_message}</p>}
+                    {r.warnings?.map((w) => (
+                      <p key={w} className="mt-1 text-xs text-amber-800">
+                        ⚠ {w}
+                      </p>
                     ))}
-                  </td>
-                  <td className="px-2 py-2 font-mono text-xs">{r.reference_number}</td>
-                  <td className="px-2 py-2 text-xs">
-                    {dateTime(r.created_at)}
-                    <br />
-                    {r.created_by_email}
-                  </td>
-                  <td className="px-2 py-2">
+                    {msg[r.id] && <p className="mt-1 text-xs text-slate-600">{msg[r.id]}</p>}
+                  </div>
+                  <p className="tabular text-sm text-slate-900 sm:text-right">{inr(r.total)}</p>
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    <Chip tone={s.tone}>{s.label}</Chip>
                     {(r.status === "needs_reconciliation" || r.status === "submitting") && (
-                      <button className={btn.secondary} disabled={busy === r.id} onClick={() => reconcile(r.id)}>
-                        {busy === r.id ? "Checking Zoho…" : "Reconcile with Zoho"}
+                      <button className={btn.ghost} disabled={busy === r.id} onClick={() => check(r.id)}>
+                        {busy === r.id ? "Checking…" : "Check Zoho"}
                       </button>
                     )}
-                    {msg[r.id] && <p className="mt-1 max-w-[12rem] text-xs text-slate-600">{msg[r.id]}</p>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+    </Section>
   );
 }

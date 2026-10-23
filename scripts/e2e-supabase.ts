@@ -57,7 +57,7 @@ async function main() {
     assert.equal((await decide("SKU003", { decision: "approved", confirm: true, quantity: 400, override_reason: "Restore 6-week cover" })).ok, true);
     assert.equal((await decide("SKU013", { decision: "approved", confirm: true, quantity: 0, override_reason: "zero test" })).ok, false, "zero order must fail");
     assert.equal((await decide("SKU006", { decision: "approved", confirm: true })).ok, true);
-    assert.equal((await decide("SKU004", { decision: "rejected", note: "e2e" })).ok, true);
+    assert.equal((await decide("SKU004", { decision: "rejected", note: "e2e check" })).ok, true);
 
     const after = await getRecommendations(runId);
     const a = (sku: string) => after.find((r) => r.sku_id === sku)!;

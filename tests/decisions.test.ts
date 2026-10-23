@@ -43,6 +43,12 @@ describe("planner decisions", () => {
     expect(r.update).toMatchObject({ approved_qty: 0, po_status: "not_applicable" });
   });
 
+  it("rejecting needs a reason", () => {
+    expect(validateDecision(rec("SKU001"), { decision: "rejected" }).errors[0]).toMatch(/reason for rejecting/);
+    expect(validateDecision(rec("SKU001"), { decision: "rejected", note: "no" }).ok).toBe(false);
+    expect(validateDecision(rec("SKU001"), { decision: "rejected", note: "Supplier on holiday" }).update).toMatchObject({ decision: "rejected", decision_note: "Supplier on holiday" });
+  });
+
   it("locks decisions once a PO is in flight or created, and on superseded runs", () => {
     expect(validateDecision(rec("SKU001", { decision: "approved", po_status: "created" }), { decision: "rejected" }).ok).toBe(false);
     expect(validateDecision(rec("SKU001", { decision: "approved", po_status: "submitting" }), { decision: "rejected" }).ok).toBe(false);
@@ -51,7 +57,7 @@ describe("planner decisions", () => {
   });
 
   it("reject and mark-for-review never make a recommendation PO-eligible", () => {
-    expect(validateDecision(rec("SKU001"), { decision: "rejected" }).update?.po_status).toBe("not_applicable");
+    expect(validateDecision(rec("SKU001"), { decision: "rejected", note: "Promo cancelled" }).update?.po_status).toBe("not_applicable");
     expect(validateDecision(rec("SKU001"), { decision: "needs_review", note: "check promo" }).update).toMatchObject({ decision: "needs_review", decision_note: "check promo" });
   });
 });

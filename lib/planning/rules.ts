@@ -44,31 +44,7 @@ export const HIGH_PERISHABILITY_COVER = { min: 3, max: 4 } as const;
 /** Snapshot older than this (vs. today) is flagged stale. */
 export const STALE_AFTER_DAYS = 7;
 
-export const RULE_LABELS: Record<RuleId, string> = {
-  demand_spike: "Rule 1 · Demand spike",
-  stockout_risk: "Rule 2 · Stockout risk",
-  overstock_risk: "Rule 3 · Overstock risk",
-  festival_adjustment: "Rule 4 · Festival uplift",
-  high_perishability: "Rule 5 · High perishability",
-};
-
-export const ACTION_LABELS: Record<PlanAction, string> = {
-  reorder_immediately: "Reorder immediately",
-  reorder_high_demand: "Reorder (high demand)",
-  pause_next_order: "Pause next order",
-  manual_review: "Manual review needed",
-  no_action: "No action",
-  insufficient_data: "Insufficient data",
-};
-
-export const STATUS_LABELS: Record<RiskStatus, string> = {
-  stockout: "Stockout risk",
-  conflict: "Conflicting rules",
-  demand_spike: "Demand spike",
-  overstock: "Overstock risk",
-  ok: "Healthy",
-  insufficient_data: "Insufficient data",
-};
+// User-facing wording for statuses, actions and rules lives in lib/presentation.ts.
 
 const STATUS_PRIORITY: Record<RiskStatus, number> = {
   stockout: 1,
@@ -310,7 +286,7 @@ export function computeSkuPlan(input: SkuPlanInput): SkuPlan {
         ? `No demand in the latest 12 weeks with ${stock} units on hand — any stock exceeds the ${limits.max}-week maximum: overstock risk (Rule 3).`
         : "No demand and no stock: no coverage risk.",
     );
-    base.warnings.push("Zero sales in the latest 12 weeks — check whether this SKU is discontinued or has a data gap.");
+    base.warnings.push("Zero sales in the last 12 weeks — check whether this product is discontinued or data is missing.");
   }
 
   // Combine flags into one status/action. All flags stay stored.
@@ -403,14 +379,14 @@ export function evaluateQuantity(
     warnings.push(`Differs from the rule-based proposal of ${plan.proposed_qty} units — an override reason is required.`);
   if (compareStockToCover(after, plan.min_cover_weeks, plan.sum_12w, uplift) < 0)
     warnings.push(
-      `Stock after this order (${after.toLocaleString("en-IN")}) still covers only ${projected ?? "–"} weeks, below the ${plan.min_cover_weeks}-week minimum. Lead time and inbound orders are not in the data.`,
+      `${qty.toLocaleString("en-IN")} units only brings stock to about ${projected ?? "–"} weeks — below the ${plan.min_cover_weeks}-week minimum. Consider ordering more (lead times and open orders aren't in the data).`,
     );
   if (compareStockToCover(after, plan.max_cover_weeks, plan.sum_12w, uplift) > 0)
     warnings.push(
-      `Stock after this order would cover ${projected ?? "∞"} weeks, above the ${plan.max_cover_weeks}-week maximum${plan.flags.high_perishability ? " for a High-perishability SKU (expiry / write-off risk)" : " (overstock risk)"}.`,
+      `${qty.toLocaleString("en-IN")} units would bring stock to about ${projected ?? "∞"} weeks — above the ${plan.max_cover_weeks}-week maximum${plan.flags.high_perishability ? " for a High-perishability product, so some may expire" : ", which risks excess stock"}.`,
     );
   if (plan.action === "pause_next_order")
-    warnings.push("Rule 3 recommends pausing the next order for this SKU.");
+    warnings.push("The rules suggest pausing orders for this product because stock is already high.");
   return { errors, warnings, projected_cover: projected };
 }
 

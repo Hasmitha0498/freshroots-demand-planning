@@ -48,6 +48,8 @@ export function validateDecision(rec: RecommendationState, input: DecisionInput)
   const note = input.note?.trim() || null;
   if (errors.length) return { ok: false, errors, warnings };
 
+  if (input.decision === "rejected" && (!note || note.length < MIN_REASON_LENGTH))
+    return { ok: false, errors: [`Add a short reason for rejecting (at least ${MIN_REASON_LENGTH} characters).`], warnings };
   if (input.decision !== "approved") {
     return {
       ok: true,

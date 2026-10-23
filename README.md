@@ -148,7 +148,8 @@ npm run build
 ```
 
 - `npm run dev` serves http://localhost:3001 (pinned in package.json).
-- `npm test` runs 67 tests: rules, ISO weeks, the dataset oracle, decisions, PO idempotency and failures, the mocked Zoho client and server connection, and the SQL migration on PGlite.
+- `npm test` runs 72 tests: rules, ISO weeks, the dataset oracle, decisions, PO idempotency and failures, the mocked Zoho client and server connection, and the SQL migration on PGlite.
+- `node scripts/ux-screenshots.mjs <url> <dir>` captures the three screens at desktop, tablet and phone widths (real device emulation, local Chrome).
 - `npm run e2e:supabase` runs the backend flow against your real Supabase project and deletes its test records afterwards.
 
 ### 5. Deploy to Vercel
@@ -159,18 +160,14 @@ npm run build
 
 ## Demo script (≈2–3 minutes)
 
-1. **Open the app.** Point out the **Simulated SAP (Supabase)** badge, the data as-of date (2026-10-19), the latest week (2026-W42) and the 15-SKU / 16-week coverage.
-2. Click **Run Demand Planning**. The backend reads Supabase fresh and saves a run. Show the KPI cards: 5 stockout, 2 overstock, 1 spike, with a note that SKU001 is counted in both. Point out the festival-month banner for 2026-10 (+25% uplift).
-3. **Click the SKU001 row** to show the calculation trace: 4w 261.0 vs 12w 214.9 (+21.4%), adjusted demand 268.6, 3.35 weeks of cover vs a 6-week minimum, and a proposed 750 = 1.5 × 500. Show the trend chart.
-4. Open **Recommendations**.
-   - Approve SKU001 (750) with the confirmation step.
-   - Edit SKU003 from 300 → 400: an override reason is required, and the coverage warning clears.
-   - Show that SKU007 (High perishability, 3–4 week limits) recommends a pause.
-5. Open **Purchase Orders**.
-   - Show the Zoho connection status (connected organisation, or Demo / Disconnected), the mapping of SKUs to real Zoho items and vendors with confirmed rates, and the approved lines grouped by vendor.
-   - **Review draft PO** → **Create Draft PO in Zoho**.
-   - Show the returned Zoho PO number, ID and status in history. Clicking again cannot create a duplicate.
-6. Close with **About / Pilot measurement**: these are proposals, not proven savings, and real impact needs a pilot.
+1. **Open the app.** On Overview, point out the data line ("Stock as of 19 Oct 2026", the "Demo data" marker meaning Supabase stands in for SAP) and the **Next step** line.
+2. Click **Run planning**. The backend reads Supabase fresh and saves a run. Show the counts (Running low 5, Excess stock 2, Sales rising 1) and the "October: +25% festival demand" note.
+3. **Click Mango Drink** in *Needs your attention*. The detail panel says why in plain words ("Stock will last about 3.4 weeks… Sales are up 21%…"). Open **Show calculation** for the exact numbers: 261.0 vs 214.9, 268.6 per week adjusted, 3.35 weeks, 750 = 1.5 × 500.
+4. In that panel, click **Approve 750 units**, then **Confirm approval**. On another product, for example Brown Rice, change 300 → 400: a reason is required before Approve unlocks. Show that Coconut Water (perishable, 3–4 week target) suggests a pause.
+5. Open **Purchase orders**.
+   - Show the header chip **Connected to Zoho · MESA Freshroots** and the approved lines grouped by vendor under **Ready to order**. An unlinked product sits under **Needs setup** with a **Set up** button.
+   - **Review purchase order** → **Create purchase order**. Show Zoho's PO number and **Open in Zoho**, then the entry in **Purchase orders**. Clicking again cannot create a duplicate.
+6. Close with **About this pilot** (footer link): these are proposals, not proven savings, and real impact needs a pilot.
 
 ## Pilot measurement (five pre-build decisions)
 
