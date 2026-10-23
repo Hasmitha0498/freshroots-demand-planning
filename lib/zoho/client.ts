@@ -24,7 +24,7 @@ export interface ZohoClientOptions {
 }
 
 export interface ZohoRequest {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PUT";
   query?: Record<string, string | number | boolean | undefined>;
   json?: unknown;
   /** Organisation-scoped endpoints need organization_id; /organizations does not. */
