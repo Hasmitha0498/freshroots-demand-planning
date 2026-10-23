@@ -27,7 +27,7 @@ Import the vendors first, because the items refer to them.
 
 1. In the left menu, go to **Items → Items**.
 2. Click **⋯ (More)** and choose **Import Items**.
-3. **Upload file:** `zoho_import/items.csv`. Use UTF-8 and comma again. Click **Next**.
+3. **Upload file:** `zoho_import/items_minimal.csv`. Use UTF-8 and comma again. Click **Next**. (The mapping list below is for the full `items.csv`; the minimal file only has the first two fields plus Selling Price and Purchase Price.)
 4. **Map fields:**
    - Item Name → **Item Name**
    - SKU → **SKU**
