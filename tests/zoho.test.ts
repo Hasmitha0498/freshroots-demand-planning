@@ -123,3 +123,14 @@ describe("mapping suggestion", () => {
     expect(c).toEqual({ item: undefined, vendor: undefined });
   });
 });
+
+describe("sales-only Zoho items", () => {
+  it("reads item_type and flags sales-only items", async () => {
+    const { toItem, isSalesOnly, salesOnlyMessage } = await import("@/lib/zoho/api");
+    expect(isSalesOnly(toItem({ item_id: 1, name: "A", item_type: "sales" }))).toBe(true);
+    expect(isSalesOnly(toItem({ item_id: 2, name: "B", item_type: "sales_and_purchases" }))).toBe(false);
+    expect(isSalesOnly(toItem({ item_id: 3, name: "C", item_type: "inventory" }))).toBe(false);
+    expect(isSalesOnly(toItem({ item_id: 4, name: "D" }))).toBe(false);
+    expect(salesOnlyMessage("Brown Rice")).toMatch(/Purchase Information/);
+  });
+});

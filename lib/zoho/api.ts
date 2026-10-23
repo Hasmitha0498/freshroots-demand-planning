@@ -13,6 +13,8 @@ export interface ZohoItem {
   status: string | null;
   purchase_rate: number | null;
   unit: string | null;
+  /** "sales" | "purchases" | "sales_and_purchases" | "inventory" (null if Zoho omits it). */
+  item_type: string | null;
 }
 export interface ZohoVendor {
   contact_id: string;
@@ -32,7 +34,24 @@ const str = (v: unknown) => (v === null || v === undefined || v === "" ? null : 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v !== "" && !Number.isNaN(Number(v)) ? Number(v) : null);
 
 export function toItem(r: Record<string, unknown>): ZohoItem {
-  return { item_id: String(r.item_id), name: String(r.name ?? ""), sku: str(r.sku), status: str(r.status), purchase_rate: num(r.purchase_rate), unit: str(r.unit) };
+  return {
+    item_id: String(r.item_id),
+    name: String(r.name ?? ""),
+    sku: str(r.sku),
+    status: str(r.status),
+    purchase_rate: num(r.purchase_rate),
+    unit: str(r.unit),
+    item_type: str(r.item_type),
+  };
+}
+
+/** Zoho rejects sales-only items on a purchase order (error 29032). */
+export function isSalesOnly(item: { item_type: string | null }): boolean {
+  return item.item_type === "sales";
+}
+
+export function salesOnlyMessage(name: string): string {
+  return `Zoho item "${name}" has only Sales information, so Zoho cannot put it on a purchase order. In Zoho Inventory open the item → Edit → tick "Purchase Information" (enter a Cost Price) → Save, then try again.`;
 }
 
 export function toVendor(r: Record<string, unknown>): ZohoVendor {

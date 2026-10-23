@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { HttpError, plannerActor, route } from "@/lib/server/actor";
-import { getItem, getVendor } from "@/lib/zoho/api";
+import { getItem, getVendor, isSalesOnly, salesOnlyMessage } from "@/lib/zoho/api";
 import { audit } from "@/lib/server/repo";
 import { asHttpError, zohoClient } from "@/lib/server/zoho";
 import { adminDb } from "@/lib/supabase/admin";
@@ -26,6 +26,7 @@ export const POST = route(async (req: Request) => {
 
   const { client, organizationId } = await zohoClient();
   const [item, vendor] = await Promise.all([getItem(client, b.zoho_item_id), getVendor(client, b.zoho_vendor_id)]).catch(asHttpError);
+  if (isSalesOnly(item)) throw new HttpError(422, salesOnlyMessage(item.name));
   if (vendor.contact_type && vendor.contact_type !== "vendor") throw new HttpError(422, `${vendor.contact_name} is a ${vendor.contact_type}, not a vendor.`);
 
   const rateSource = item.purchase_rate !== null && Math.abs(item.purchase_rate - rate) < 0.005 ? "zoho_item" : "planner_entered";

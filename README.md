@@ -148,7 +148,7 @@ npm run build
 ```
 
 - `npm run dev` serves http://localhost:3001 (pinned in package.json).
-- `npm test` runs 66 tests: rules, ISO weeks, the dataset oracle, decisions, PO idempotency and failures, the mocked Zoho client and server connection, and the SQL migration on PGlite.
+- `npm test` runs 67 tests: rules, ISO weeks, the dataset oracle, decisions, PO idempotency and failures, the mocked Zoho client and server connection, and the SQL migration on PGlite.
 - `npm run e2e:supabase` runs the backend flow against your real Supabase project and deletes its test records afterwards.
 
 ### 5. Deploy to Vercel

@@ -11,6 +11,7 @@ interface Item {
   sku: string | null;
   status: string | null;
   purchase_rate: number | null;
+  item_type: string | null;
 }
 interface Vendor {
   contact_id: string;
@@ -159,6 +160,7 @@ function MappingRow({ sku, mapping, catalog, canEdit, organizationId }: { sku: S
                   {i.name}
                   {i.sku ? ` [${i.sku}]` : ""}
                   {i.status && i.status !== "active" ? ` (${i.status})` : ""}
+                  {i.item_type === "sales" ? " — sales only (enable Purchase Information in Zoho)" : ""}
                 </option>
               ))}
             </select>
@@ -191,6 +193,11 @@ function MappingRow({ sku, mapping, catalog, canEdit, organizationId }: { sku: S
           <p className="text-xs text-slate-500 md:col-span-4">
             {item ? (item.purchase_rate && item.purchase_rate > 0 ? `Zoho item purchase rate: ${inr(item.purchase_rate)}. Change it only if you have a confirmed price.` : "This Zoho item has no purchase rate — enter and confirm the agreed price.") : "Rate comes from the Zoho item where set, or must be entered by you."}
           </p>
+          {item?.item_type === "sales" && (
+            <p className="text-sm text-red-700 md:col-span-4">
+              This Zoho item has only Sales information, so it cannot go on a purchase order. In Zoho: open the item → Edit → tick Purchase Information → Save, then reload items here.
+            </p>
+          )}
           {error && <p className="text-sm text-red-700 md:col-span-4">{error}</p>}
         </div>
       )}
