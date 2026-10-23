@@ -30,7 +30,11 @@ function setEnvLine(key: string, value: string) {
 }
 
 function pushToVercel(key: string, value: string) {
-  execFileSync("npx", ["--yes", "vercel@latest", "env", "add", key, "production", "--force"], { input: value, stdio: ["pipe", "ignore", "inherit"] });
+  try {
+    execFileSync("npx", ["--yes", "vercel@latest", "env", "add", key, "--environment", "production", "--force"], { input: value, stdio: ["pipe", "ignore", "pipe"] });
+  } catch (e) {
+    throw new Error(`Vercel env add ${key} failed: ${(e as { stderr?: Buffer }).stderr?.toString().trim() ?? e}`);
+  }
   console.log(`✓ Vercel production: ${key} set`);
 }
 
