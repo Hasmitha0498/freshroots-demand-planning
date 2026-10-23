@@ -2,20 +2,19 @@ import { connection } from "next/server";
 import { MappingEditor, type MappingView, type SkuOption } from "./MappingEditor";
 import { PoHistory, type PoRow } from "./PoHistory";
 import { ReadyOrders, type ReadyLine } from "./ReadyOrders";
-import { ZohoConnectionPanel } from "./ZohoConnectionPanel";
+import { ZohoStatusPanel } from "./ZohoStatusPanel";
 import { SetupNotice } from "@/components/SetupNotice";
 import { PageTitle } from "@/components/ui";
 import { missingSupabaseEnv, supabaseConfigured } from "@/lib/env";
 import { listMappings, listPurchaseOrders } from "@/lib/server/poStore";
 import { getApprovedForPo, getRecommendationsByIds } from "@/lib/server/repo";
 import { getZohoStatus } from "@/lib/server/zoho";
-import { missingZohoEnv, zohoPoWebLink } from "@/lib/zoho/config";
+import { zohoPoWebLink } from "@/lib/zoho/config";
 import { adminDb } from "@/lib/supabase/admin";
 
-export default async function PurchaseOrdersPage({ searchParams }: PageProps<"/purchase-orders">) {
+export default async function PurchaseOrdersPage() {
   await connection(); // always read the latest Supabase state, never a build-time snapshot
   if (!supabaseConfigured()) return <SetupNotice missing={missingSupabaseEnv()} />;
-  const sp = await searchParams;
 
   let data;
   try {
@@ -33,7 +32,7 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps<"/p
     return <SetupNotice error={e instanceof Error ? e.message : String(e)} />;
   }
   const { status, approved, mappings, pos, skus, poRecs } = data;
-  const live = status.configured && status.connected && Boolean(status.organization_id);
+  const live = status.live;
 
   const lines: ReadyLine[] = approved.map((r) => {
     const m = mappings.find((x) => x.sku_id === r.sku_id && x.organization_id === status.organization_id);
@@ -65,11 +64,7 @@ export default async function PurchaseOrdersPage({ searchParams }: PageProps<"/p
   return (
     <div className="space-y-6">
       <PageTitle title="Purchase Orders" subtitle="Approved reorders become DRAFT purchase orders in Zoho Inventory only after review and an explicit click." />
-      <ZohoConnectionPanel
-        status={status}
-        missingEnv={missingZohoEnv()}
-        flash={{ error: typeof sp.zoho_error === "string" ? sp.zoho_error : undefined, connected: sp.zoho_connected === "1" }}
-      />
+      <ZohoStatusPanel status={status} />
       <ReadyOrders lines={lines} live={live} orgName={status.organization_name} />
       <MappingEditor skus={skuOptions} mappings={mappings as MappingView[]} organizationId={status.organization_id} />
       <PoHistory rows={rows} />

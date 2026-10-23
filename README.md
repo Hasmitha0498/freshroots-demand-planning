@@ -47,7 +47,7 @@ Source tables (simulated SAP, upserted by the seed and never touched by decision
 App records (never reseeded):
 - `planning_runs`: snapshot, counts, data issues
 - `recommendations`: one per SKU per run, with the full calculation JSON, the decision, the approver and timestamp, and `po_status`
-- `zoho_connection`: single row with **AES-256-GCM-encrypted** tokens
+- `zoho_connection`: unused since the switch to the server-side refresh token (kept so existing databases need no migration)
 - `zoho_item_mappings`: SKU → real Zoho item + real Zoho **vendor** + confirmed rate
 - `purchase_orders`: unique `idempotency_key` and `reference_number`, request payload, Zoho response
 - `audit_events`
@@ -55,9 +55,9 @@ App records (never reseeded):
 `claim_recommendations_for_po()` atomically locks approved recommendations to one PO submission.
 
 **Access and security**
-- **There is no sign-in.** Anyone who can open the app can run planning, approve orders and create Zoho **draft** POs. Runs, decisions and POs are recorded under `PLANNER_NAME`.
+- **There is no sign-in, and Zoho is connected server-side.** Anyone who can open the app can run planning, approve orders and create Zoho **draft** POs in the configured organisation, with no Zoho login. Runs, decisions and POs are recorded under `PLANNER_NAME`.
 - Before sharing a deployed URL, put the whole site behind **Vercel Deployment Protection** (Project → Settings → Deployment Protection: Vercel Authentication or Password Protection). That needs no app code.
-- The browser never talks to Supabase or Zoho directly; only Next.js server routes do, using the service-role key and encrypted Zoho tokens.
+- The browser never talks to Supabase or Zoho directly; only Next.js server routes do, using the service-role key and the Zoho refresh token from server environment variables.
 - RLS is enabled on every table with **no policies**, so the public anon/publishable key cannot read or write anything.
 - Approval confirmation, override reasons, the quantity checks and the duplicate-PO guards are still enforced on the server and in the database.
 
@@ -85,27 +85,33 @@ npm run db:seed
    - It is idempotent (upserts) and never touches runs, approvals, mappings or POs.
 4. Optionally set `PLANNER_NAME` (default "Demand Planner"). No user accounts are needed.
 
-### 3. Zoho Inventory (live mode)
+### 3. Zoho Inventory (live mode, server-to-server)
 
-1. In the [Zoho API Console](https://api-console.zoho.in/), use the console for your account's region and create a **Server-based Application**.
-   - Authorized redirect URI: `http://localhost:3001/api/zoho/callback` for local use, plus your Vercel URL `https://<app>.vercel.app/api/zoho/callback`.
-2. Set `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` and `ZOHO_REDIRECT_URI` (must match exactly).
-   - Set `ZOHO_ACCOUNTS_DOMAIN` and `ZOHO_API_DOMAIN` for your region; the defaults are India: `accounts.zoho.in` and `www.zohoapis.in`.
-   - Set `ZOHO_TOKEN_ENCRYPTION_KEY` from `openssl rand -base64 32`.
-3. In Zoho Inventory, make sure the **items** and **vendors** you will order already exist. The app never creates master records.
-4. In the app, go to **Purchase Orders**:
-   1. **Connect Zoho Inventory** (OAuth, `access_type=offline`, validated `state`)
-   2. **Load Zoho organisations** → select one
-   3. **Load Zoho items & vendors** → map each SKU and confirm the rate
+Zoho is connected **once, by the account owner**, using a Zoho **Self Client** refresh token stored on the server. Visitors never sign in to Zoho, and there is no redirect URI or "Connect" button.
 
-The OAuth scopes requested are:
-- `ZohoInventory.settings.READ`
-- `ZohoInventory.items.READ`
-- `ZohoInventory.contacts.READ`
-- `ZohoInventory.purchaseorders.CREATE`
-- `ZohoInventory.purchaseorders.READ`
+1. Find your data centre: the domain you use to sign in to Zoho (`zoho.com`, `zoho.in`, `zoho.eu`, …). Set `ZOHO_ACCOUNTS_DOMAIN=https://accounts.zoho.<dc>` and `ZOHO_API_DOMAIN=https://www.zohoapis.<dc>`.
+2. In **https://api-console.zoho.&lt;dc&gt;**, choose **Add Client → Self Client**. Copy its **Client ID** and **Client Secret** into `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET`.
+3. In the Self Client, open **Generate Code**:
+   - **Scope:** `ZohoInventory.settings.READ,ZohoInventory.items.READ,ZohoInventory.contacts.READ,ZohoInventory.purchaseorders.CREATE,ZohoInventory.purchaseorders.READ`
+   - **Time duration:** 10 minutes
+   - If asked, pick the Zoho Inventory organisation.
+   - Click **Create** and copy the code.
+4. Within those 10 minutes, run:
 
-Without Zoho credentials, or before connecting, the PO page runs in **Demo / Disconnected** mode. It shows a clearly labelled example payload, and nothing is sent.
+```bash
+npm run zoho:token -- <code> --vercel
+```
+
+   This saves `ZOHO_REFRESH_TOKEN`, `ZOHO_API_DOMAIN` and, when there is only one organisation, `ZOHO_ORGANIZATION_ID` to `.env.local`. With `--vercel`, it also copies the Zoho settings to Vercel production. Then redeploy with `npx vercel deploy --prod`.
+5. In Zoho Inventory, make sure the **items** and **vendors** you will order already exist. The app never creates master records.
+6. In the app, go to **Purchase Orders**, check the "Live Zoho Inventory" badge, then use **Load Zoho items & vendors** to map each SKU and confirm its rate.
+
+How it works at runtime:
+- The server exchanges the refresh token for one-hour access tokens and caches them per server instance. Concurrent requests share one refresh.
+- `ZOHO_ORGANIZATION_ID` is required only when the Zoho account has several organisations; otherwise the only organisation is used.
+- To disconnect, revoke the token in Zoho (Self Client) or remove `ZOHO_REFRESH_TOKEN`.
+
+Without Zoho credentials, the PO page runs in **Demo / Disconnected** mode. It shows a clearly labelled example payload, and nothing is sent.
 
 **Zoho implementation notes.** These follow the official docs, checked 2026-10-23.
 - **Create.** `POST /inventory/v1/purchaseorders?organization_id=…`
@@ -141,15 +147,15 @@ npm run typecheck
 npm run build
 ```
 
-- `npm run dev` serves http://localhost:3001 (pinned in package.json) so it matches the Zoho redirect URI.
-- `npm test` runs 58 tests: rules, ISO weeks, the dataset oracle, decisions, PO idempotency and failures, the mocked Zoho client, crypto, and the SQL migration on PGlite.
+- `npm run dev` serves http://localhost:3001 (pinned in package.json).
+- `npm test` runs 62 tests: rules, ISO weeks, the dataset oracle, decisions, PO idempotency and failures, the mocked Zoho client and server connection, and the SQL migration on PGlite.
+- `npm run e2e:supabase` runs the backend flow against your real Supabase project and deletes its test records afterwards.
 
 ### 5. Deploy to Vercel
 
 1. Import the repo into Vercel. The framework (Next.js) is auto-detected.
-2. Add every variable from `.env.example` under Settings → Environment Variables, with `ZOHO_REDIRECT_URI=https://<app>.vercel.app/api/zoho/callback`.
-3. Register that redirect URI in the Zoho API Console.
-4. Seed from your machine with `npm run db:seed`. The runtime reads nothing from the local disk.
+2. Add every variable from `.env.example` under Settings → Environment Variables, or use `npm run zoho:token -- <code> --vercel` for the Zoho ones.
+3. Seed from your machine with `npm run db:seed`. The runtime reads nothing from the local disk.
 
 ## Demo script (≈2–3 minutes)
 
@@ -182,6 +188,7 @@ npm run build
 - The 15-SKU demo dataset is not the case's 400 SKUs and 1,200 distributors.
 - Proposals use standard quantities. There is no lead-time, inbound-PO, expiry or cost optimisation, because the data does not contain them.
 - Reconciliation scans up to 1,000 recent Zoho POs by reference number, because the docs do not list a reference filter.
-- One Zoho connection is shared by the app, in a single-tenant pilot.
+- One server-side Zoho connection (one organisation) is shared by everyone using the app, in a single-tenant pilot.
+- Access tokens are cached per serverless instance. Zoho limits how often a refresh token can mint access tokens, so very bursty cold starts could briefly hit that limit.
 - No sign-in or per-user audit trail: every action is recorded under `PLANNER_NAME`. Use Vercel Deployment Protection for any shared deployment.
 - The PO delivery address is Zoho's organisation default. `Location` is shown for reference only.

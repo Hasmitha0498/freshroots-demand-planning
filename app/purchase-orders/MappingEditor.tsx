@@ -79,7 +79,7 @@ export function MappingEditor({ skus, mappings, organizationId }: { skus: SkuOpt
       {error && <div className="mt-3"><Notice tone="error">{error}</Notice></div>}
       {catalog?.truncated && <div className="mt-3"><Notice tone="warn">Large Zoho catalog: only the first 2,000 records were loaded.</Notice></div>}
       {catalog && catalog.vendors.length === 0 && <div className="mt-3"><Notice tone="warn">No active vendor contacts found in this Zoho organisation. Create the vendor in Zoho first.</Notice></div>}
-      {!organizationId && <p className="mt-3 text-sm text-slate-500">Connect Zoho and select an organisation to edit mappings.</p>}
+      {!organizationId && <p className="mt-3 text-sm text-slate-500">Mappings can be edited once the server Zoho connection is live.</p>}
       <div className="mt-3 space-y-2">
         {rows.map((s) => (
           <MappingRow key={s.sku_id} sku={s} mapping={mappings.find((m) => m.sku_id === s.sku_id)} catalog={catalog} canEdit={Boolean(organizationId)} organizationId={organizationId} />

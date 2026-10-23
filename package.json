@@ -12,7 +12,8 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:check": "tsx scripts/seed.ts --check",
-    "e2e:supabase": "tsx --conditions=react-server scripts/e2e-supabase.ts"
+    "e2e:supabase": "tsx --conditions=react-server scripts/e2e-supabase.ts",
+    "zoho:token": "tsx scripts/zoho-token.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",

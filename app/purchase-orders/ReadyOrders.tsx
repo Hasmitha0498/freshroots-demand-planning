@@ -232,7 +232,7 @@ function VendorGroup({ lines, live, orgName }: { lines: ReadyLine[]; live: boole
 
 function DemoPreview({ lines }: { lines: ReadyLine[] }) {
   const example = {
-    vendor_id: "<existing Zoho vendor_id — select after connecting>",
+    vendor_id: "<existing Zoho vendor_id — mapped once Zoho is live>",
     reference_number: "FR-<generated>",
     date: "<today, IST>",
     line_items: lines.map((l) => ({ item_id: `<Zoho item_id for ${l.sku_id}>`, quantity: l.approved_qty, purchase_rate: "<rate from Zoho item or planner>" })),

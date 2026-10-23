@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { ZohoAmbiguousError, ZohoApiError, ZohoClient } from "@/lib/zoho/client";
 import { createPurchaseOrder, listVendors, parseCreatedPo } from "@/lib/zoho/api";
 import { buildPoPayload, compareCreatedLines, validatePoLines, type PoLineInput } from "@/lib/zoho/po";
-import { decryptSecret, encryptSecret } from "@/lib/zoho/crypto";
 import { safeAccountsOrigin, safeApiOrigin, zohoPoWebLink } from "@/lib/zoho/config";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -90,17 +89,6 @@ describe("PO payload", () => {
 });
 
 describe("security helpers", () => {
-  it("round-trips encrypted tokens and rejects tampering", () => {
-    const key = Buffer.alloc(32, 7).toString("base64");
-    const enc = encryptSecret("1000.refresh", key);
-    expect(enc).not.toContain("1000.refresh");
-    expect(decryptSecret(enc, key)).toBe("1000.refresh");
-    const parts = enc.split(".");
-    parts[3] = Buffer.from("x").toString("base64url");
-    expect(() => decryptSecret(parts.join("."), key)).toThrow();
-    expect(() => encryptSecret("x", "short")).toThrow(/32 bytes/);
-  });
-
   it("only accepts Zoho hosts for regional domains", () => {
     expect(safeAccountsOrigin("https://accounts.zoho.in")).toBe("https://accounts.zoho.in");
     expect(safeAccountsOrigin("https://accounts.zoho.in.evil.com")).toBeNull();

@@ -24,14 +24,14 @@ export const POST = route(async (req: Request) => {
   const { data: sku } = await adminDb().from("sku_master").select("sku_id").eq("sku_id", b.sku_id).maybeSingle();
   if (!sku) throw new HttpError(404, "Unknown SKU.");
 
-  const { client, connection } = await zohoClient();
+  const { client, organizationId } = await zohoClient();
   const [item, vendor] = await Promise.all([getItem(client, b.zoho_item_id), getVendor(client, b.zoho_vendor_id)]).catch(asHttpError);
   if (vendor.contact_type && vendor.contact_type !== "vendor") throw new HttpError(422, `${vendor.contact_name} is a ${vendor.contact_type}, not a vendor.`);
 
   const rateSource = item.purchase_rate !== null && Math.abs(item.purchase_rate - rate) < 0.005 ? "zoho_item" : "planner_entered";
   const row = {
     sku_id: b.sku_id,
-    organization_id: connection.organization_id!,
+    organization_id: organizationId,
     zoho_item_id: item.item_id,
     zoho_item_name: item.name,
     zoho_item_sku: item.sku,

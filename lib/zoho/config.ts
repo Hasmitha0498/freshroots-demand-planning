@@ -30,28 +30,33 @@ export function safeApiOrigin(value: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Server-to-server connection: a Zoho "Self Client" refresh token generated
+ * once by the account owner and stored as a server environment variable.
+ * There is no per-visitor OAuth sign-in or redirect URI.
+ */
 export interface ZohoConfig {
   clientId: string;
   clientSecret: string;
-  redirectUri: string;
+  refreshToken: string;
+  /** Optional: required only when the Zoho account has more than one organisation. */
+  organizationId: string | null;
   accountsDomain: string;
   apiDomain: string;
-  encryptionKey: string;
 }
 
 export function zohoConfig(): ZohoConfig | null {
-  const clientId = process.env.ZOHO_CLIENT_ID;
-  const clientSecret = process.env.ZOHO_CLIENT_SECRET;
-  const redirectUri = process.env.ZOHO_REDIRECT_URI;
-  const encryptionKey = process.env.ZOHO_TOKEN_ENCRYPTION_KEY;
+  const clientId = process.env.ZOHO_CLIENT_ID?.trim();
+  const clientSecret = process.env.ZOHO_CLIENT_SECRET?.trim();
+  const refreshToken = process.env.ZOHO_REFRESH_TOKEN?.trim();
   const accountsDomain = safeAccountsOrigin(process.env.ZOHO_ACCOUNTS_DOMAIN ?? "https://accounts.zoho.in");
   const apiDomain = safeApiOrigin(process.env.ZOHO_API_DOMAIN ?? "https://www.zohoapis.in");
-  if (!clientId || !clientSecret || !redirectUri || !encryptionKey || !accountsDomain || !apiDomain) return null;
-  return { clientId, clientSecret, redirectUri, accountsDomain, apiDomain, encryptionKey };
+  if (!clientId || !clientSecret || !refreshToken || !accountsDomain || !apiDomain) return null;
+  return { clientId, clientSecret, refreshToken, organizationId: process.env.ZOHO_ORGANIZATION_ID?.trim() || null, accountsDomain, apiDomain };
 }
 
 export function missingZohoEnv(): string[] {
-  return ["ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REDIRECT_URI", "ZOHO_TOKEN_ENCRYPTION_KEY"].filter((k) => !process.env[k]);
+  return ["ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN"].filter((k) => !process.env[k]?.trim());
 }
 
 /**
