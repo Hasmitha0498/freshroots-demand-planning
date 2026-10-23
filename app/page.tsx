@@ -1,69 +1,94 @@
-import Image from "next/image";
+import { connection } from "next/server";
+import { DashboardView } from "./DashboardView";
+import { PilotMeasurement } from "@/components/PilotMeasurement";
+import { RunPlanningButton } from "@/components/RunPlanningButton";
+import { SetupNotice } from "@/components/SetupNotice";
+import { Card, Notice, PageTitle } from "@/components/ui";
+import { missingSupabaseEnv, supabaseConfigured } from "@/lib/env";
+import { dateTime } from "@/lib/format";
+import { getLatestRun, getRecommendations, getSourceStatus } from "@/lib/server/repo";
 
-export default function Home() {
+export default async function DashboardPage() {
+  await connection(); // always read the latest Supabase state, never a build-time snapshot
+  if (!supabaseConfigured()) return <SetupNotice missing={missingSupabaseEnv()} />;
+  let data;
+  try {
+    const [status, run] = await Promise.all([getSourceStatus(), getLatestRun()]);
+    const recs = run ? await getRecommendations(run.id) : [];
+    data = { status, run, recs };
+  } catch (e) {
+    return <SetupNotice error={e instanceof Error ? e.message : String(e)} />;
+  }
+  const { status, run, recs } = data;
+  const snap = run?.snapshot;
+  const issues = run?.data_issues ?? [];
+  const errors = issues.filter((i) => i.severity === "error");
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="space-y-6">
+      <PageTitle
+        title="Dashboard"
+        subtitle="Reads the latest stored SAP-style records from Supabase on demand and applies Raghav's five planning rules."
+        actions={
+          <RunPlanningButton
+            disabled={status.sku_count === 0}
+            reason={status.sku_count === 0 ? "No data in Supabase yet — run npm run db:seed." : undefined}
+          />
+        }
+      />
+
+      <Card className="grid gap-4 p-4 text-sm sm:grid-cols-2 lg:grid-cols-5">
+        <Fact label="Inventory as of" value={status.as_of_date ?? "missing"} />
+        <Fact label="Latest sales week" value={status.latest_week ?? "missing"} sub={snap?.latest_week_end ? `ends ${snap.latest_week_end}` : undefined} />
+        <Fact label="Coverage" value={`${status.sku_count} SKUs · ${status.sales_rows} sales rows`} sub={snap ? `${snap.weeks_of_history} weeks (${snap.earliest_week} → ${snap.latest_week})` : undefined} />
+        <Fact label="Last data load" value={status.last_load ? dateTime(status.last_load.loaded_at) : "never"} sub="static until re-seeded" />
+        <Fact label="Last planning run" value={run ? dateTime(run.created_at) : "no runs yet"} sub={run ? `by ${run.created_by_email}` : undefined} />
+      </Card>
+
+      {snap?.is_stale && (
+        <Notice tone="warn" title="Stale data">
+          The inventory snapshot is {snap.data_age_days} days old (as of {snap.as_of_date}). Recommendations reflect that snapshot, not today&apos;s stock. Refresh the source data before acting.
+        </Notice>
+      )}
+      {snap && (
+        <Notice tone="info">
+          Planning period <strong>{snap.planning_month}</strong> (from the snapshot date, not today&apos;s date):{" "}
+          {snap.festival_applied ? "festival month — projected weekly demand is uplifted 25% before coverage checks" : "not a festival month — no uplift"}
+          {snap.festival_source === "fallback_rule" && " (calendar row missing; documented Oct/Nov/Mar rule used)"}.
+        </Notice>
+      )}
+      {issues.length > 0 && (
+        <Notice tone={errors.length ? "error" : "warn"} title={`${issues.length} data issue(s) found in the last run`}>
+          <ul className="list-disc pl-5">
+            {issues.slice(0, 10).map((i, n) => (
+              <li key={n}>
+                <span className="font-mono text-xs">{i.table}</span> {i.key}: {i.message}
+              </li>
+            ))}
+          </ul>
+        </Notice>
+      )}
+
+      {run ? (
+        <DashboardView run={run} recs={recs} />
+      ) : (
+        <Card className="p-10 text-center text-slate-600">
+          <p className="font-medium text-slate-900">No planning run yet.</p>
+          <p className="mt-1 text-sm">Click <strong>Run Demand Planning</strong> to read the stored data and compute recommendations.</p>
+        </Card>
+      )}
+
+      <PilotMeasurement />
+    </div>
+  );
+}
+
+function Fact({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-0.5 font-medium text-slate-900">{value}</p>
+      {sub && <p className="text-xs text-slate-500">{sub}</p>}
     </div>
   );
 }

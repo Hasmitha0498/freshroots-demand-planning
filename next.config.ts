@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
+// cacheComponents/partialPrefetching are intentionally off: every page in this
+// app shows per-request, authenticated planning data, so classic dynamic
+// rendering is the simplest correct model.
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
   turbopack: {
     rules: {
       "*.css": {
