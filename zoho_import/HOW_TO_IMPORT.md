@@ -23,6 +23,8 @@ Import the vendors first, because the items refer to them.
 
 ## 2. Import the items (about 2 minutes)
 
+> **Use `items_minimal.csv`** (Item Name, SKU, Selling Price, Purchase Price). A new organisation rejected every row of the full `items.csv` because of its optional columns (unit, item type, preferred vendor). The app doesn't need those: vendors are mapped in the app.
+
 1. In the left menu, go to **Items → Items**.
 2. Click **⋯ (More)** and choose **Import Items**.
 3. **Upload file:** `zoho_import/items.csv`. Use UTF-8 and comma again. Click **Next**.
