@@ -7,6 +7,9 @@ import { completeOAuth } from "@/lib/server/zoho";
 const STATE_COOKIE = "zoho_oauth_state";
 
 function back(req: NextRequest, params: Record<string, string>) {
+  // Logged server-side so a failed connection is visible in Vercel / dev logs (no codes or tokens).
+  if (params.zoho_error) console.error("[zoho callback] failed:", params.zoho_error);
+  else console.log("[zoho callback] connected");
   const url = new URL("/purchase-orders", req.nextUrl.origin);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = NextResponse.redirect(url);
