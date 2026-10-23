@@ -10,12 +10,17 @@ import type { CreatedPo } from "@/lib/zoho/api";
 let recs: PoRecRecord[];
 let mappings: MappingRecord[];
 let pos: PoRecord[];
+let audits: { action: string; details: unknown }[];
 
 function fakeStore(): PoStore {
   return {
     getRecs: async (ids) => recs.filter((r) => ids.includes(r.id)).map((r) => ({ ...r })),
     getMappings: async (skus) => mappings.filter((m) => skus.includes(m.sku_id)),
-    findPoByKey: async (k) => pos.find((p) => p.idempotency_key === k) ?? null,
+    // Return copies, like the real store (rows are re-read from the database).
+    findPoByKey: async (k) => {
+      const p = pos.find((x) => x.idempotency_key === k);
+      return p ? { ...p } : null;
+    },
     getPo: async (id) => pos.find((p) => p.id === id) ?? null,
     insertPo: async (row) => {
       if (pos.some((p) => p.idempotency_key === row.idempotency_key)) return null;
@@ -53,7 +58,9 @@ function fakeStore(): PoStore {
       Object.assign(pos.find((p) => p.id === po.id)!, { status: "needs_reconciliation", error_message: message, updated_at: new Date(0).toISOString() });
       for (const id of po.recommendation_ids) Object.assign(recs.find((x) => x.id === id)!, { po_status: "needs_reconciliation" });
     },
-    audit: async () => {},
+    audit: async (_actor, action, _id, details) => {
+      audits.push({ action, details });
+    },
   };
 }
 
@@ -74,6 +81,7 @@ beforeEach(() => {
   const map = (sku: string, vendor: string, item: string): MappingRecord => ({ sku_id: sku, organization_id: "org1", zoho_item_id: item, zoho_item_name: item, zoho_vendor_id: vendor, zoho_vendor_name: vendor, purchase_rate: 10 });
   mappings = [map("SKU001", "vA", "i1"), map("SKU013", "vA", "i13"), map("SKU003", "vB", "i3"), map("SKU004", "vA", "i4")];
   pos = [];
+  audits = [];
 });
 
 const store = () => fakeStore();
@@ -139,6 +147,7 @@ describe("draft PO creation", () => {
     const r = await createDraftPo(store(), z, "p@x", { recommendation_ids: ["r1"], confirm: true });
     expect(r.po.reference_number).toBe(ref);
     expect(r.po.attempts).toBe(2);
+    expect(audits.filter((x) => x.action === "po.submit").map((x) => (x.details as { attempt: number }).attempt)).toEqual([1, 2]);
     expect(pos).toHaveLength(1);
   });
 

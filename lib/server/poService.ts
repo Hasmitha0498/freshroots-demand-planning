@@ -173,7 +173,7 @@ export async function createDraftPo(store: PoStore, zoho: ZohoPort, actorEmail: 
     if (existing.status === "needs_reconciliation")
       throw new HttpError(409, "A previous attempt had an unclear result. Use Reconcile with Zoho before retrying.");
     if (!(await store.retryFailedPo(existing.id, preview.payload))) throw new HttpError(409, "Another submission is in progress.");
-    po = { ...existing, status: "submitting", request_payload: preview.payload };
+    po = { ...existing, status: "submitting", request_payload: preview.payload, attempts: existing.attempts + 1 };
   } else {
     const inserted = await store.insertPo({
       idempotency_key: preview.idempotency_key,
