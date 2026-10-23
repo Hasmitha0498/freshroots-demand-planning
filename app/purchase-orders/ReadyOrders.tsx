@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Badge, btn, Card, Notice } from "@/components/ui";
-import { int, inr, PO_STATUS_LABEL } from "@/lib/format";
+import { dateTime, int, inr, PO_STATUS_LABEL } from "@/lib/format";
 
 export interface ReadyLine {
   recommendation_id: string;
@@ -10,6 +10,8 @@ export interface ReadyLine {
   sku_name: string;
   approved_qty: number;
   approved_by: string | null;
+  approved_at: string | null;
+  run_id: string;
   location: string | null;
   po_status: string;
   zoho_item_name: string | null;
@@ -70,6 +72,7 @@ export function ReadyOrders({ lines, live, orgName }: { lines: ReadyLine[]; live
 
 function VendorGroup({ lines, live, orgName }: { lines: ReadyLine[]; live: boolean; orgName: string | null }) {
   const router = useRouter();
+  const [withdrawing, setWithdrawing] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>(lines.map((l) => l.recommendation_id));
   const [poNumber, setPoNumber] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -77,6 +80,29 @@ function VendorGroup({ lines, live, orgName }: { lines: ReadyLine[]; live: boole
   const [error, setError] = useState<{ message: string; details?: string[] } | null>(null);
   const [result, setResult] = useState<CreateResult | null>(null);
   const body = () => JSON.stringify({ recommendation_ids: selected, purchaseorder_number: poNumber || null, confirm: true });
+
+  /** Removes an approved line from the PO queue (recorded as a rejection in the audit trail). */
+  async function withdraw(l: ReadyLine) {
+    if (!confirm(`Withdraw the approved order for ${l.sku_id} (${l.approved_qty} units, run ${l.run_id.slice(0, 8)})? It will not be sent to Zoho.`)) return;
+    setWithdrawing(l.recommendation_id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/recommendations/${l.recommendation_id}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: "rejected", note: "Withdrawn from the PO queue" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw { message: json.error ?? `HTTP ${res.status}` };
+      setPreview(null);
+      setSelected(selected.filter((x) => x !== l.recommendation_id));
+      router.refresh();
+    } catch (e) {
+      setError(e as { message: string });
+    } finally {
+      setWithdrawing(null);
+    }
+  }
 
   async function post(url: string) {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: body() });
@@ -148,11 +174,23 @@ function VendorGroup({ lines, live, orgName }: { lines: ReadyLine[]; live: boole
               </td>
               <td className="px-2 py-1.5">
                 <span className="font-mono text-xs">{l.sku_id}</span> {l.sku_name}
+                <span className="block text-xs text-slate-500">
+                  run {l.run_id.slice(0, 8)} · approved {dateTime(l.approved_at)}
+                </span>
               </td>
               <td className="px-2 py-1.5">{l.zoho_item_name}</td>
               <td className="tabular px-2 py-1.5 text-right">{int(l.approved_qty)}</td>
               <td className="tabular px-2 py-1.5 text-right">{inr(l.purchase_rate)}</td>
-              <td className="px-2 py-1.5 text-xs">{l.po_status === "failed" ? <span className="text-red-700">PO not created — retry allowed</span> : "Approved"}</td>
+              <td className="px-2 py-1.5 text-xs">
+                {l.po_status === "failed" ? <span className="text-red-700">PO not created — retry allowed</span> : "Approved"}
+                <button
+                  className="ml-2 text-rose-700 underline disabled:opacity-50"
+                  disabled={withdrawing !== null || busy !== null}
+                  onClick={() => withdraw(l)}
+                >
+                  {withdrawing === l.recommendation_id ? "Withdrawing…" : "Withdraw"}
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>

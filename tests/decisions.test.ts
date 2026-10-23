@@ -87,3 +87,21 @@ describe("runPlanning reads from the store (Supabase in production)", () => {
     await expect(runPlanning(store, { id: null, name: "Test Planner" })).rejects.toThrow(/db:seed/);
   });
 });
+
+describe("one open order per SKU", () => {
+  const r = (id: string, decision: string, po_status: string, qty: number | null = 100) =>
+    ({ id, run_id: "run-" + id, decision, approved_qty: qty, po_status }) as import("@/lib/planning/decisions").SameSkuRecommendation;
+  it("finds another approved order still waiting for a PO", async () => {
+    const { findOpenApproval } = await import("@/lib/planning/decisions");
+    expect(findOpenApproval("new", [r("old", "approved", "ready")])?.id).toBe("old");
+    expect(findOpenApproval("new", [r("old", "approved", "needs_reconciliation")])?.id).toBe("old");
+    expect(findOpenApproval("new", [r("old", "approved", "failed")])?.id).toBe("old");
+  });
+  it("ignores itself, completed POs, pauses and non-approved items", async () => {
+    const { findOpenApproval } = await import("@/lib/planning/decisions");
+    expect(findOpenApproval("same", [r("same", "approved", "ready")])).toBeNull();
+    expect(findOpenApproval("new", [r("old", "approved", "created")])).toBeNull();
+    expect(findOpenApproval("new", [r("old", "approved", "not_applicable", 0)])).toBeNull();
+    expect(findOpenApproval("new", [r("old", "rejected", "not_applicable", null)])).toBeNull();
+  });
+});

@@ -90,3 +90,23 @@ export function validateDecision(rec: RecommendationState, input: DecisionInput)
     },
   };
 }
+
+const OPEN_PO_STATUSES: PoStatus[] = ["ready", "failed", "submitting", "needs_reconciliation"];
+
+export interface SameSkuRecommendation {
+  id: string;
+  run_id: string;
+  decision: string;
+  approved_qty: number | null;
+  po_status: PoStatus;
+}
+
+/**
+ * Another approved order for the same SKU that is still waiting for (or in) a
+ * PO. Approving again while one exists would order the SKU twice.
+ */
+export function findOpenApproval(recId: string, sameSku: SameSkuRecommendation[]): SameSkuRecommendation | null {
+  return (
+    sameSku.find((r) => r.id !== recId && r.decision === "approved" && (r.approved_qty ?? 0) > 0 && OPEN_PO_STATUSES.includes(r.po_status)) ?? null
+  );
+}

@@ -44,6 +44,8 @@ export default async function PurchaseOrdersPage() {
       sku_name: r.calculation.sku_name,
       approved_qty: r.approved_qty ?? 0,
       approved_by: r.decided_by_email,
+      approved_at: r.decided_at,
+      run_id: r.run_id,
       location: r.calculation.location,
       po_status: r.po_status,
       zoho_item_name: m?.zoho_item_name ?? null,
